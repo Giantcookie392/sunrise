@@ -121,7 +121,10 @@ impl Game<'_> {
         for (conn, mob, e) in super::creatures::RemainingActions::new(events) {
             // A mob's target in another level is out of its reach (#1278).
             let here = self.lan.as_ref().is_some_and(|host| {
-                host.hub.guests.iter().any(|g| g.conn == conn && host.hub.here(g))
+                host.hub
+                    .guests
+                    .iter()
+                    .any(|g| g.conn == conn && host.hub.here(g))
             });
             if here {
                 self.guest_hit_by(conn, |g| g.guest_mob_event(mob, e));
@@ -557,27 +560,6 @@ mod tests {
         let guests = vec![(7, view(30.0, false)), (8, view(3.0, false))];
         assert_eq!(player_for(&golem, None, &guests, Some(7)), Some(7));
         // Calm again (`stopBeingAngry`): the nearest player is seen.
-        golem.extra.anger = 0;
-        golem.extra.angry_at = None;
-        assert_eq!(player_for(&golem, None, &guests, Some(7)), Some(8));
-    }
-
-    /// #1278: the guest a golem is angry at leaves the level. It keeps that
-    /// departed player, seeing no one, instead of turning its anger on the
-    /// bystander; calm again, it sees the nearest player.
-    #[test]
-    #[ignore = "daily"]
-    fn an_angry_golem_never_turns_on_a_bystander_when_its_attacker_leaves() {
-        let mut golem = mob_of("minecraft:iron_golem").expect("prepared resources");
-        golem.age = 500;
-        golem.extra.anger = 300;
-        golem.extra.angry_at = Some(Who::Player);
-        // The attacker (conn 7) left; the bystander (conn 8) stays, and so
-        // does the host.
-        let guests = vec![(8, view(3.0, false))];
-        let host = view(2.0, false);
-        assert_eq!(player_for(&golem, Some(&host), &guests, Some(7)), Some(7));
-        assert_eq!(player_for(&golem, None, &Vec::new(), Some(7)), Some(7));
         golem.extra.anger = 0;
         golem.extra.angry_at = None;
         assert_eq!(player_for(&golem, None, &guests, Some(7)), Some(8));

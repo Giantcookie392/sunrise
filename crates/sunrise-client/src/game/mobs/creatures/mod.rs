@@ -8917,6 +8917,10 @@ mod leash_without_item_postbaseline_controls;
 #[path = "../tests/revenge_home_tests.rs"]
 mod revenge_home_tests;
 
+#[cfg(test)]
+#[path = "../tests/departed_guest_tests.rs"]
+pub(in crate::game) mod departed_guest_tests;
+
 mod knockback;
 
 #[cfg(test)]

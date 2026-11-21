@@ -7611,6 +7611,4 @@ pub fn apply_mob_pushes(m: &mut Mob, pending: &mut PendingPushes) {
     }
 }
 #[cfg(test)]
-mod departed_target_tests;
-#[cfg(test)]
 mod guardian_tests;
