@@ -271,7 +271,9 @@ impl Game<'_> {
                     let (bx, bz) = (m.position.x.floor() as i32, m.position.z.floor() as i32);
                     let seen_guest = if resuming {
                         resume_guest
-                    } else if guests.is_empty() {
+                    } else if guests.is_empty() && !bindings.contains_key(&m.id) {
+                        // A binding outlives the last guest leaving: a target
+                        // on them stays theirs until the mob lets go (#1278).
                         None
                     } else {
                         let bound = bindings.get(&m.id).copied();

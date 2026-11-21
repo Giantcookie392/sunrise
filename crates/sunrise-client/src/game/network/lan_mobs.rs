@@ -311,7 +311,7 @@ impl Game<'_> {
 mod tests {
     use super::*;
     use sunrise_client::mobs::{Mob, PlayerView};
-    use sunrise_gameplay::lan::mob_players::choose;
+    use sunrise_gameplay::lan::mob_players::{choose, departed};
 
     #[test]
     fn a_guests_view_keeps_who_hurt_them_and_who_they_hurt() {
@@ -433,7 +433,7 @@ mod tests {
                 Some(7)
             );
         }
-        // A targeted guest who left: the mob looks again.
+        // A targeted guest who left is `player_for`'s to keep (`departed`): `choose` looks again.
         assert_eq!(
             choose(MOB, true, true, Some(&view(2.0, false)), &guests, Some(9)),
             None
@@ -494,9 +494,14 @@ mod tests {
 
     /// The mob of the prepared resources' type `kind` (None without them).
     fn mob_of(kind: &str) -> Option<Mob> {
-        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../.local/sunrise-client")
-            .join(sunrise_core::VANILLA_VERSION);
+        // The daily run names its prepared root; a checkout keeps it in `.local`.
+        let root = std::env::var_os("SUNRISE_TEST_RESOURCES")
+            .map(std::path::PathBuf::from)
+            .unwrap_or_else(|| {
+                std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                    .join("../../.local/sunrise-client")
+                    .join(sunrise_core::VANILLA_VERSION)
+            });
         let types = sunrise_client::mobs::MobTypes::load(&root).ok()?;
         let t = std::sync::Arc::new(types.types.get(kind)?.clone());
         Some(Mob::new(1, t, MOB, 0.0))
@@ -523,5 +528,41 @@ mod tests {
         golem.extra.anger = 0;
         golem.extra.angry_at = None;
         assert_eq!(player_for(&golem, None, &guests, Some(7)), Some(8));
+    }
+
+    /// #1278: the guest a golem is angry at leaves the level. It keeps that
+    /// departed player, seeing no one, instead of turning its anger on the
+    /// bystander; calm again, it sees the nearest player.
+    #[test]
+    #[ignore = "daily"]
+    fn an_angry_golem_never_turns_on_a_bystander_when_its_attacker_leaves() {
+        let mut golem = mob_of("minecraft:iron_golem").expect("prepared resources");
+        golem.age = 500;
+        golem.extra.anger = 300;
+        golem.extra.angry_at = Some(Who::Player);
+        // The attacker (conn 7) left; the bystander (conn 8) stays, and so
+        // does the host.
+        let guests = vec![(8, view(3.0, false))];
+        let host = view(2.0, false);
+        assert_eq!(player_for(&golem, Some(&host), &guests, Some(7)), Some(7));
+        assert_eq!(player_for(&golem, None, &Vec::new(), Some(7)), Some(7));
+        golem.extra.anger = 0;
+        golem.extra.angry_at = None;
+        assert_eq!(player_for(&golem, None, &guests, Some(7)), Some(8));
+    }
+
+    /// #1278 cases 5 and 6: the guest a mob aims at (or a golem is angry at)
+    /// disconnects or changes dimension, leaving this level's guests. The
+    /// binding stays on that departed player, so the mob sees no one until its
+    /// own goals let go; it never moves to the nearest player. A guest still
+    /// here, the host, or a mob that holds no one, change nothing.
+    #[test]
+    fn a_mob_stays_bound_to_a_guest_who_left_until_it_lets_go() {
+        let here = vec![(8, view(2.0, false))];
+        assert_eq!(departed(true, &here, Some(7)), Some(7));
+        assert_eq!(departed(true, &Vec::new(), Some(7)), Some(7));
+        assert_eq!(departed(true, &here, Some(8)), None);
+        assert_eq!(departed(true, &here, None), None);
+        assert_eq!(departed(false, &here, Some(7)), None);
     }
 }

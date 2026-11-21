@@ -1484,8 +1484,12 @@ impl Game<'_> {
         // What stands in a guest's slot while a mob holds that guest's view for
         // its tick (see `lent` below).
         let mut spare = guests.first().map(|g| g.1.clone());
+        // Bindings outlive the last guest leaving: a mob aiming at them keeps
+        // that departed player until its own goals let go (#1278).
         let mut bindings = match self.lan.as_mut() {
-            Some(host) if !guests.is_empty() => std::mem::take(&mut host.mob_players),
+            Some(host) if !guests.is_empty() || !host.mob_players.is_empty() => {
+                std::mem::take(&mut host.mob_players)
+            }
             _ => Default::default(),
         };
         // The guests' entity ids by connection, for the shulker bullets fired
@@ -1546,7 +1550,7 @@ impl Game<'_> {
         lent.give_back(&mut self.world);
         self.last_hurt_by_player = player_credit;
         if let Some(host) = self.lan.as_mut()
-            && !guests.is_empty()
+            && (!guests.is_empty() || !bindings.is_empty())
         {
             // A set: a scan of every mob for each binding is quadratic, and a
             // server's loaded mobs run into the thousands.
