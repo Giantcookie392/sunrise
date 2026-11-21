@@ -41,6 +41,31 @@ impl Game<'_> {
         views
     }
 
+    /// How a mob targeting a guest who went to another level sees them
+    /// (#1278): the same player, alive, never in sight, and found by no query
+    /// of this level ([`PlayerView::elsewhere`]).
+    pub(super) fn lan_guests_elsewhere(&mut self) -> GuestViews {
+        let Some(host) = self.lan.as_ref() else {
+            return Vec::new();
+        };
+        let conns: Vec<(u32, u128)> = host
+            .hub
+            .guests
+            .iter()
+            .filter(|g| !host.hub.here(g) && g.loaded && !g.dead && !g.is_fake())
+            .map(|g| (g.conn, g.uuid))
+            .collect();
+        let mut views = Vec::new();
+        for (conn, uuid) in conns {
+            if let Some(Some(v)) = self.as_guest(conn, |g| g.player_view()) {
+                let mut v = guest_view(v, uuid, [0.0; 3]);
+                v.elsewhere = true;
+                views.push((conn, v));
+            }
+        }
+        views
+    }
+
     /// The guest `conn`'s real identity — the uuid its lent view carries and
     /// its entity id — when the guest is a player the tick can name: a fake
     /// guest resolves as none, as the write handle refuses it (#1077).
@@ -94,7 +119,13 @@ impl Game<'_> {
             return;
         }
         for (conn, mob, e) in super::creatures::RemainingActions::new(events) {
-            self.guest_hit_by(conn, |g| g.guest_mob_event(mob, e));
+            // A mob's target in another level is out of its reach (#1278).
+            let here = self.lan.as_ref().is_some_and(|host| {
+                host.hub.guests.iter().any(|g| g.conn == conn && host.hub.here(g))
+            });
+            if here {
+                self.guest_hit_by(conn, |g| g.guest_mob_event(mob, e));
+            }
         }
     }
 
@@ -362,6 +393,7 @@ mod tests {
             passenger: false,
             riding_vehicle: None,
             vehicle: None,
+            elsewhere: false,
         }
     }
 

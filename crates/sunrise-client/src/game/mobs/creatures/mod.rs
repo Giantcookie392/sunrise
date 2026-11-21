@@ -580,6 +580,7 @@ impl Game<'_> {
             sleep_timer: self.sleep_timer,
             passenger: self.riding.is_some(),
             riding_vehicle: self.riding,
+            elsewhere: false,
             vehicle: self.riding.and_then(|id| {
                 if let Some(b) = self.boats.iter().find(|b| b.id == id) {
                     // A boat's box: 1.375 wide and 0.5625 high around its position.
@@ -1492,6 +1493,19 @@ impl Game<'_> {
             }
             _ => Default::default(),
         };
+        // Bound guests in another level, for the mobs still targeting them.
+        let elsewhere = if bindings.values().any(|c| !guests.iter().any(|g| g.0 == *c)) {
+            self.lan_guests_elsewhere()
+        } else {
+            Vec::new()
+        };
+        // The mobs this level ticks: the shared bindings also hold other
+        // levels' mobs, which this level's pruning leaves alone.
+        let owned: sunrise_client::fast_hash::FxHashSet<u32> = if bindings.is_empty() {
+            Default::default()
+        } else {
+            mobs.iter().map(|m| m.id).collect()
+        };
         // The guests' entity ids by connection, for the shulker bullets fired
         // at the guest a mob sees.
         let mut guest_ids: Vec<(u32, u32)> = match self.lan.as_ref() {
@@ -1527,6 +1541,7 @@ impl Game<'_> {
             died: &mut died,
             ticked: &mut ticked,
             guests: &mut guests,
+            elsewhere: &elsewhere,
             spare: &mut spare,
             bindings: &mut bindings,
             guest_ids: &mut guest_ids,
@@ -1556,7 +1571,7 @@ impl Game<'_> {
             // server's loaded mobs run into the thousands.
             let live: sunrise_client::fast_hash::FxHashSet<u32> =
                 mobs.iter().map(|m| m.id).collect();
-            bindings.retain(|id, _| live.contains(id));
+            bindings.retain(|id, _| live.contains(id) || !owned.contains(id));
             host.mob_players = bindings;
         }
         // The mobs added during the tick (into the emptied `self.mobs`) come
